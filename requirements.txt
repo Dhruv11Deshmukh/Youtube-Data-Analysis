@@ -1,5 +1,0 @@
-kafka-python
-google-api-python-client
-elasticsearch
-pyflink
-schedule
