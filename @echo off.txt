@@ -1,0 +1,8 @@
+@echo off
+cd C:\youtube-streaming-pipeline
+docker-compose up -d
+start cmd /k "python app/youtube_producer.py"
+start cmd /k "python app/flink_job.py"
+start cmd /k "uvicorn app.api_server:app --reload --port 8000"
+cd frontend
+start cmd /k "python -m http.server 5500"
