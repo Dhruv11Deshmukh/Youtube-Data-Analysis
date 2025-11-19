@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YouTube Live Analytics Dashboard</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    /* ===================== GLOBAL STYLES ===================== */
+    body {
+      font-family: 'Poppins', sans-serif;
+      background-color: #0b0b0b; /* obsidian black */
+      color: #f5f5f5; /* pearl white */
+      text-align: center;
+      margin: 0;
+      padding: 0;
+    }
+
+    h1 {
+      color: #FFD700; /* gold */
+      font-size: 2.8em;
+      margin-top: 25px;
+      text-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
+    }
+
+    h2 {
+      color: #f5f5f5;
+      font-weight: 600;
+      text-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+    }
+
+    /* ===================== CARDS ===================== */
+    .card {
+      background: #141414;
+      border-radius: 18px;
+      box-shadow: 0 0 20px rgba(255, 215, 0, 0.2);
+      padding: 25px;
+      margin: 30px auto;
+      width: 80%;
+      color: #fff;
+      transition: 0.3s;
+    }
+
+    .card:hover {
+      box-shadow: 0 0 25px rgba(255, 215, 0, 0.4);
+    }
+
+    svg {
+      background-color: #0f0f0f;
+      border-radius: 12px;
+    }
+
+    /* Tooltip */
+    .tooltip {
+      position: absolute;
+      background-color: #222;
+      color: #FFD700;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 0.9em;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease-in-out;
+    }
+  </style>
+</head>
+<body>
+  <h1>📊 YouTube Live Video Analytics</h1>
+
+  <div class="card">
+    <h2>📈 View Count Over Time</h2>
+    <div id="chart"></div>
+  </div>
+
+  <div class="card">
+    <h2>🏆 Top 5 Trending Videos</h2>
+    <div id="top5"></div>
+  </div>
+
+  <div class="card">
+    <h2>🕒 Upload Frequency by Hour</h2>
+    <div id="timeline"></div>
+  </div>
+
+  <div class="tooltip" id="tooltip"></div>
+
+  <script>
+    const API_URL = "http://localhost:8000/api/videos";
+
+    async function fetchData() {
+      const res = await fetch(API_URL);
+      const data = await res.json();
+      return data;
+    }
+
+    function drawCharts(data) {
+      d3.select("#chart").selectAll("*").remove();
+      d3.select("#top5").selectAll("*").remove();
+      d3.select("#timeline").selectAll("*").remove();
+
+      const tooltip = d3.select("#tooltip");
+
+      // Simulate viewCount for demo
+      data.forEach(d => d.viewCount = Math.floor(Math.random() * 100000));
+      data.forEach(d => d.date = new Date(d.publishedAt));
+
+      // ===== LINE CHART =====
+      const svg = d3.select("#chart").append("svg").attr("width", 850).attr("height", 420);
+      const x = d3.scaleTime().domain(d3.extent(data, d => d.date)).range([70, 800]);
+      const y = d3.scaleLinear().domain([0, d3.max(data, d => d.viewCount)]).range([360, 50]);
+
+      const line = d3.line()
+        .x(d => x(d.date))
+        .y(d => y(d.viewCount))
+        .curve(d3.curveMonotoneX);
+
+      const path = svg.append("path")
+        .datum(data)
+        .attr("fill", "none")
+        .attr("stroke", "#FFD700")
+        .attr("stroke-width", 3)
+        .attr("d", line);
+
+      svg.append("g").attr("transform", "translate(0,360)").call(d3.axisBottom(x).tickFormat(d3.timeFormat("%H:%M")));
+      svg.append("g").attr("transform", "translate(70,0)").call(d3.axisLeft(y));
+
+      const titleText = svg.append("text")
+        .attr("x", 430)
+        .attr("y", 30)
+        .attr("text-anchor", "middle")
+        .attr("fill", "#FFD700")
+        .attr("font-size", "18px")
+        .text("View Trends (All Videos)");
+
+      // ===== BAR CHART (Top 5) =====
+      const top5 = data.sort((a, b) => b.viewCount - a.viewCount).slice(0, 5);
+      const svg2 = d3.select("#top5").append("svg").attr("width", 850).attr("height", 420);
+
+      const x2 = d3.scaleBand().domain(top5.map(d => d.title.slice(0, 25))).range([70, 800]).padding(0.2);
+      const y2 = d3.scaleLinear().domain([0, d3.max(top5, d => d.viewCount)]).range([360, 50]);
+
+      const bars = svg2.selectAll("rect")
+        .data(top5)
+        .enter()
+        .append("rect")
+        .attr("x", d => x2(d.title.slice(0, 25)))
+        .attr("y", d => y2(d.viewCount))
+        .attr("width", x2.bandwidth())
+        .attr("height", d => 360 - y2(d.viewCount))
+        .attr("fill", "#FFD700")
+        .style("cursor", "pointer")
+        .on("mouseover", function(event, d) {
+          d3.select(this).attr("fill", "#FFF4C1");
+          tooltip.style("opacity", 1).html(`<strong>${d.title}</strong><br>Views: ${d.viewCount.toLocaleString()}`);
+        })
+        .on("mousemove", function(event) {
+          tooltip.style("left", event.pageX + 15 + "px").style("top", event.pageY - 25 + "px");
+        })
+        .on("mouseout", function() {
+          d3.select(this).attr("fill", "#FFD700");
+          tooltip.style("opacity", 0);
+        })
+        .on("click", function(event, d) {
+          const filtered = data.filter(v => v.title === d.title);
+          updateLineChart(filtered, d.title);
+        });
+
+      svg2.append("g").attr("transform", "translate(0,360)").call(d3.axisBottom(x2)).selectAll("text")
+        .attr("transform", "rotate(-20)").style("text-anchor", "end").attr("fill", "#fff");
+      svg2.append("g").attr("transform", "translate(70,0)").call(d3.axisLeft(y2));
+
+      svg2.append("text")
+        .attr("x", 430)
+        .attr("y", 30)
+        .attr("text-anchor", "middle")
+        .attr("fill", "#f5f5f5")
+        .attr("font-size", "18px")
+        .text("Click a bar to view trend by title");
+
+      // ===== TIME BUCKET CHART =====
+      const hours = d3.rollup(data, v => v.length, d => d.date.getHours());
+      const hourData = Array.from(hours, ([hour, count]) => ({ hour, count }));
+
+      const svg3 = d3.select("#timeline").append("svg").attr("width", 850).attr("height", 420);
+      const x3 = d3.scaleBand().domain(hourData.map(d => d.hour)).range([70, 800]).padding(0.1);
+      const y3 = d3.scaleLinear().domain([0, d3.max(hourData, d => d.count)]).range([360, 50]);
+
+      svg3.selectAll("rect")
+        .data(hourData)
+        .enter()
+        .append("rect")
+        .attr("x", d => x3(d.hour))
+        .attr("y", d => y3(d.count))
+        .attr("width", x3.bandwidth())
+        .attr("height", d => 360 - y3(d.count))
+        .attr("fill", "#daa520");
+
+      svg3.append("g").attr("transform", "translate(0,360)").call(d3.axisBottom(x3));
+      svg3.append("g").attr("transform", "translate(70,0)").call(d3.axisLeft(y3));
+
+      svg3.append("text")
+        .attr("x", 430)
+        .attr("y", 30)
+        .attr("text-anchor", "middle")
+        .attr("fill", "#FFD700")
+        .attr("font-size", "18px")
+        .text("Upload Frequency by Hour");
+
+      // ===== LINE CHART UPDATE =====
+      function updateLineChart(filteredData, title) {
+        svg.selectAll("path").remove();
+        svg.selectAll("circle").remove();
+
+        const xNew = d3.scaleTime().domain(d3.extent(filteredData, d => d.date)).range([70, 800]);
+        const yNew = d3.scaleLinear().domain([0, d3.max(filteredData, d => d.viewCount)]).range([360, 50]);
+
+        const lineNew = d3.line()
+          .x(d => xNew(d.date))
+          .y(d => yNew(d.viewCount))
+          .curve(d3.curveMonotoneX);
+
+        svg.append("path")
+          .datum(filteredData)
+          .attr("fill", "none")
+          .attr("stroke", "#daa520")
+          .attr("stroke-width", 3)
+          .attr("d", lineNew);
+
+        svg.selectAll("circle")
+          .data(filteredData)
+          .enter()
+          .append("circle")
+          .attr("cx", d => xNew(d.date))
+          .attr("cy", d => yNew(d.viewCount))
+          .attr("r", 4)
+          .attr("fill", "#FFD700")
+          .on("mouseover", (event, d) => {
+            tooltip.style("opacity", 1).html(`<strong>${d.title}</strong><br>Views: ${d.viewCount}`);
+          })
+          .on("mousemove", event => {
+            tooltip.style("left", event.pageX + 15 + "px").style("top", event.pageY - 25 + "px");
+          })
+          .on("mouseout", () => tooltip.style("opacity", 0));
+
+        titleText.text(`View Trend: ${title.slice(0, 40)}...`);
+      }
+    }
+
+    async function updateDashboard() {
+      const data = await fetchData();
+      drawCharts(data);
+    }
+
+    updateDashboard();
+    setInterval(updateDashboard, 15000);
+  </script>
+</body>
+</html>
