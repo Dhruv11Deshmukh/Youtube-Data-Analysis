@@ -3,7 +3,7 @@ from kafka import KafkaProducer
 from googleapiclient.discovery import build
 
 # === CONFIG ===
-API_KEY = "AIzaSyAD0eaiV8NLIndrVE5r4jGNi7J9GkxlCtA"
+API_KEY = "Your_API_Key"
 CHANNEL_ID = "UCt4t-jeY85JegMlZ-E5UWtA"  # example: AajTak
 KAFKA_TOPIC = "youtube_data"
 KAFKA_BROKER = "localhost:9092"
@@ -44,3 +44,4 @@ if __name__ == "__main__":
     while True:
         schedule.run_pending()
         time.sleep(5)
+
